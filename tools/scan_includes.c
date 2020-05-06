@@ -38,11 +38,8 @@ void *xmalloc(const size_t size)
 
 void options_add_file(char *fname)
 {
-	char *filename = strdup(fname);
-	if (!filename) {
-		perror("strdup");
-		exit(1);
-	}
+	char *filename = xmalloc(strlen(fname) + 1);
+	strcpy(filename, fname);
 	if (!(Options.include_paths = realloc(Options.include_paths,
 			sizeof(Options.include_paths[0]) * ++Options.include_paths_len))) {
 		perror("realloc");
@@ -53,18 +50,6 @@ void options_add_file(char *fname)
 
 void scan_file(char *filename) {
 	FILE *f = fopen(filename, "r");
-	if (!f) {
-		for (char **include = Options.include_paths;
-				include < Options.include_paths + Options.include_paths_len;
-				include++) {
-			size_t len = strlen(*include) + strlen(filename) + 1;
-			char *path = xmalloc(len);
-			snprintf(path, len, "%s%s", *include, filename);
-			f = fopen(path, "r");
-			free(path);
-			if (f) break;
-		}
-	}
 
 	if (!f) {
 		if (Options.strict) {
@@ -124,6 +109,28 @@ void scan_file(char *filename) {
 					char *include = xmalloc(length + 1);
 					strncpy(include, buffer, length);
 					include[length] = '\0';
+
+					f = fopen(include, "r");
+					char *path = NULL;
+					if (!f) {
+						for (char **include_path = Options.include_paths;
+								include_path < Options.include_paths + Options.include_paths_len;
+								include_path++) {
+							size_t len = strlen(*include_path) + strlen(include) + 1;
+							path = xmalloc(len);
+							snprintf(path, len, "%s%s", *include_path, include);
+							f = fopen(path, "r");
+							if (f) break;
+							free(path);
+							path = NULL;
+						}
+					}
+					if (f) fclose(f);
+
+					if (path) {
+						free(include);
+						include = path;
+					}
 					printf("%s ", include);
 					if (is_include) {
 						scan_file(include);
